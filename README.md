@@ -4,7 +4,7 @@ Generate TOTP codes in a private Telegram chat for five minutes. Each user has a
 
 Secrets stay in memory. The bot attempts to delete secret messages immediately and session messages when the session ends. No database or session backups are used.
 
-## Quick start
+## Local setup
 
 Requires Docker Engine and Docker Compose v2.
 
@@ -19,7 +19,14 @@ umask 077
 cp .env.example .env
 ```
 
-Edit `.env` and set `BOT_TOKEN`. `DISPLAY_TIMEZONE` accepts an IANA timezone and defaults to `Asia/Colombo`. Never commit `.env` or put a TOTP secret in it.
+Edit `.env` and set your BotFather token:
+
+```dotenv
+BOT_TOKEN=your_botfather_token
+DISPLAY_TIMEZONE=Asia/Colombo
+```
+
+`DISPLAY_TIMEZONE` accepts an IANA timezone. Never commit `.env` or put a TOTP secret in it.
 
 Start the bot:
 
@@ -28,7 +35,31 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Open the bot in Telegram and send `/start`. Run only one instance per bot token. For server deployment, see [AWS EC2 setup](docs/EC2.md).
+Open the bot in Telegram and send `/start`. Run only one instance per bot token.
+
+## Server setup
+
+On an Ubuntu 24.04 server, install Docker and Git:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y docker.io docker-compose-v2 git
+sudo systemctl enable --now docker
+```
+
+Clone the repository and create `.env` using the local setup steps above. To edit the configuration in the terminal, run `nano .env`; save with Ctrl+O, Enter, then Ctrl+X.
+
+Stop any local copy using the same bot token. Confirm the server clock is synchronized, then start the service from the project directory:
+
+```sh
+timedatectl status
+sudo docker compose up -d --build
+sudo docker compose ps
+```
+
+Look for `System clock synchronized: yes` and a container status of `Up`. Test `/start` in Telegram. The container keeps running after SSH disconnects and restarts after a server reboot unless intentionally stopped.
+
+Stop gracefully with `sudo docker compose down`. For EC2 instance settings, SSH access, updates, and troubleshooting, see [AWS EC2 setup](docs/EC2.md).
 
 ## Usage
 
