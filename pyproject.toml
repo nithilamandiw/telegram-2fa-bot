@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "temporary-telegram-totp"
+version = "0.1.0"
+description = "Private, memory-only five-minute Telegram TOTP sessions"
+requires-python = ">=3.12"
+dependencies = [
+  "aiogram==3.22.0",
+  "pyotp==2.9.0",
+  "tzdata==2025.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.4.2", "pytest-asyncio==1.2.0", "ruff==0.14.4"]
+
+[project.scripts]
+telegram-totp = "app.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
