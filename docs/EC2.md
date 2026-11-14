@@ -1,6 +1,6 @@
 # AWS EC2 Deployment
 
-Run one bot container on Ubuntu 24.04 LTS using Docker Compose. No web server, domain, database, or load balancer is required.
+Run one bot container on Ubuntu 24.04 LTS using Docker Compose. SQLite stores authorization metadata in a Docker volume; TOTP secrets stay in memory. No web server, domain, separate database service, or load balancer is required.
 
 ## 1. Launch and connect
 
@@ -48,7 +48,7 @@ cp .env.example .env
 nano .env
 ```
 
-Set `BOT_TOKEN` to your BotFather token. Optionally change `DISPLAY_TIMEZONE` to an IANA timezone. Save and exit the editor. Keep `.env` private and out of Git.
+Set `BOT_TOKEN` to your BotFather token and `OWNER_TELEGRAM_ID` to your own numeric Telegram user ID. Owner configuration is required; do not use a username or the bot's ID. If needed, follow the [owner ID lookup](../README.md#owner-id-lookup) before starting. Optionally change `DISPLAY_TIMEZONE` to an IANA timezone. Keep `AUTH_DB_PATH=data/access.sqlite3` for the supplied Docker volume. Save and exit the editor. Keep `.env` private and out of Git.
 
 In BotFather, disable group joining (`/setjoingroups`) and inline mode (`/setinline` → `/empty`). Stop any other copy using the same bot token.
 
@@ -68,6 +68,8 @@ sudo docker compose ps
 
 The service should show `Up`. Test `/start`, code refresh, Stop, and five-minute expiry in Telegram using a dummy secret first.
 
+Start the private chat from the owner account before inviting users. Test a second account: `/start` → Request access → owner Approve/Deny. Use `/requests` to recover undelivered notifications, `/users` to list approvals, and `/revoke <user_id>` to remove access and end an active session. `/whoami` shows each user's own ID before approval.
+
 You can close SSH after startup. Docker and the container restart automatically after an instance reboot unless the container was intentionally stopped. Active sessions end on restart; message deletion is best effort.
 
 ## 4. Update, stop, and troubleshoot
@@ -81,7 +83,9 @@ git pull --ff-only origin main
 sudo docker compose up -d --build
 ```
 
-The ignored `.env` stays on the server. Updates restart the bot and end active sessions.
+The ignored `.env` stays on the server. Updates restart the bot and end active sessions. When upgrading from the public-access version, add `OWNER_TELEGRAM_ID` to the existing `.env` before rebuilding; all other users must request approval.
+
+Access decisions survive rebuilds and normal shutdowns in the named `access-data` volume. Do not use `docker compose down -v` unless you intend to delete approvals. The image initializes the database directory for UID 10001; keep the supplied volume path and ownership. Local Python and Docker have separate approval storage, and different bot IDs have separate approvals.
 
 Stop gracefully:
 
@@ -95,6 +99,6 @@ For startup errors, run the bot in the foreground after stopping the detached se
 sudo docker compose run --rm bot
 ```
 
-Check the token, BotFather settings, outbound connectivity, and whether another bot instance is running. Container log storage is disabled, so use foreground output for diagnostics. Press Ctrl+C before restarting with `sudo docker compose up -d`.
+Check the token, numeric owner ID, database path/permissions, BotFather settings, outbound connectivity, and whether another bot instance is running. Container log storage is disabled, so use foreground output for diagnostics. Press Ctrl+C before restarting with `sudo docker compose up -d`.
 
 Before retiring the server, stop the bot gracefully. Terminate unused instances and review retained volumes and allocated IP addresses for ongoing charges. See the [README](../README.md#privacy-and-operation) for privacy and cleanup limits.

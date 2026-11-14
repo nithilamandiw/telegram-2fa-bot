@@ -20,3 +20,6 @@ core.*
 .agents/
 *.pem
 *.key
+data/
+*.sqlite3
+*.sqlite3-*

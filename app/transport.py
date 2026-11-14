@@ -35,7 +35,11 @@ def keyboard(buttons: Buttons) -> InlineKeyboardMarkup | None:
         return None
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=label, callback_data=data) for label, data in buttons]
+            [
+                InlineKeyboardButton(text=label, callback_data=data)
+                for label, data in buttons[i : i + 2]
+            ]
+            for i in range(0, len(buttons), 2)
         ]
     )
 

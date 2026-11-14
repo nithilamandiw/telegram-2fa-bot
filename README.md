@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.12 or newer">
   <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="Docker Compose">
   <img src="https://img.shields.io/badge/Session-5_minutes-7C3AED?style=flat-square" alt="Five-minute sessions">
-  <img src="https://img.shields.io/badge/Storage-Memory_only-475569?style=flat-square" alt="Sessions stored in memory only">
+  <img src="https://img.shields.io/badge/TOTP-Memory_only-475569?style=flat-square" alt="TOTP sessions stored in memory only">
 </p>
 
 <p>
@@ -23,13 +23,13 @@
 
 ---
 
-Send a TOTP secret in a private chat. Get a code that refreshes automatically for **five minutes**, with a countdown showing when the code changes and when the session ends.
+After owner approval, send a TOTP secret in a private chat. Get a code that refreshes automatically for **five minutes**, with a countdown showing when the code changes and when the session ends.
 
 | ⏱️ Temporary sessions | 👤 Separate for each user |
 | --- | --- |
 | Five-minute lifetime with an early **Stop** button. | Each user can view and control only their own session. |
-| **📊 Live countdowns** | **🧠 Memory-only state** |
-| Code and session time bars update about every five seconds. | No database, saved accounts, or session backups. |
+| **📊 Live countdowns** | **🧠 Memory-only TOTP sessions** |
+| Code and session time bars update about every five seconds. | No saved secrets, codes, or session backups. SQLite stores access decisions only. |
 
 > [!IMPORTANT]
 > Telegram bot chats are not end-to-end encrypted. Telegram and the running bot process submitted secrets. Message deletion is best effort.
@@ -66,14 +66,18 @@ umask 077
 cp .env.example .env
 ```
 
-Edit `.env` and set your BotFather token:
+Edit `.env` and set your BotFather token and **your own numeric Telegram user ID**:
 
 ```dotenv
 BOT_TOKEN=your_botfather_token
 DISPLAY_TIMEZONE=Asia/Colombo
+OWNER_TELEGRAM_ID=123456789
+AUTH_DB_PATH=data/access.sqlite3
 ```
 
-`DISPLAY_TIMEZONE` accepts an IANA timezone. Keep `.env` out of Git and use it only for bot configuration, never TOTP secrets.
+Replace the example owner ID with your own user ID, not a username or the bot's ID. Missing or invalid owner configuration prevents startup. If you do not know your ID, use [Owner ID lookup](#owner-id-lookup) before starting.
+
+`DISPLAY_TIMEZONE` accepts an IANA timezone. Keep `.env` out of Git and use it only for bot configuration, never TOTP secrets. Keep the default database path when using the supplied Docker volume.
 
 ### 3. Start
 
@@ -83,6 +87,19 @@ docker compose ps
 ```
 
 When the service shows **Up**, open your bot in Telegram and send `/start`. Run **one instance per bot token**.
+
+### Owner ID lookup
+
+Keep all bot instances stopped, set `BOT_TOKEN` in `.env`, then send `/whoami` to your bot in Telegram. It will not reply while stopped. Before allowing others to use the bot, run:
+
+```sh
+docker compose build
+docker compose run --rm bot python -m app.owner_id
+```
+
+The helper needs only `BOT_TOKEN`. It prints user IDs from private `/whoami` messages among the first 100 pending updates, without saving or printing other messages. Copy your ID into `OWNER_TELEGRAM_ID`. On EC2, prefix the Docker commands with `sudo`. With the local Python environment instead, load `.env` as in Development and run `.venv/bin/python -m app.owner_id`.
+
+If there is a large backlog or an active webhook, the helper may not find the message. It does not clear pending updates or change webhooks. This lookup also requires working Telegram connectivity.
 
 ## Server setup
 
@@ -116,15 +133,31 @@ The container keeps running after SSH disconnects and restarts after a server re
 
 ## Usage
 
+Only the configured owner is authorized initially. Other people open the bot, send `/start`, and press **Request access**. The owner receives the request in their private chat with **Approve** and **Deny** buttons. The owner must press Start in the bot first so it can deliver requests; failed delivery leaves the request available through `/requests`.
+
+Unapproved people can check their own ID with `/whoami`, view access status, and request access. Their secret submissions are not parsed or used, and deletion is attempted. They should wait for approval before sending secrets. Denied or revoked users cannot submit another request; the owner can restore access using `/approve`.
+
 | Action | Result |
 | --- | --- |
 | `/start` or `/help` | Instructions and privacy information |
+| `/whoami` | Your own numeric Telegram user ID; available before approval |
 | `/generate` | Request a secret; the prompt expires after one minute |
 | Send a Base32 secret or `otpauth://totp/...` link | Start a five-minute session |
 | **Refresh** | Update the code and timers without extending the session |
 | **Stop** or `/cancel` | End the session and attempt message cleanup |
 
 A new valid secret replaces only that user's session. The bot attempts to delete secret messages immediately and session messages when finished.
+
+Owner commands work only from `OWNER_TELEGRAM_ID` in its private chat:
+
+| Owner action | Result |
+| --- | --- |
+| `/requests` | Pending requests, 20 per page, with Review and Approve/Deny buttons |
+| `/users` | Approved users, 20 per page; the owner is always allowed |
+| `/approve 123456789` | Grant or restore access to that numeric user ID |
+| `/revoke 123456789` | Remove access, end the user's active session, and attempt message cleanup |
+
+Decisions take effect without restarting. Old request buttons cannot override a later decision. The owner cannot revoke their own access. If the owner command menu is unavailable on first startup, commands still work when typed; restarting after the owner presses Start registers the menu.
 
 <details>
 <summary><b>Supported secrets and code settings</b></summary>
@@ -145,6 +178,8 @@ HOTP, QR images, and authenticator export links are not supported.
 
 - **Deletion has limits.** Outages and crashes can prevent cleanup; screenshots and notifications may remain.
 - **Restarts end sessions.** Secrets and message IDs are not restored. Old messages may need manual deletion, and updates queued during downtime are discarded at startup.
+- **Approvals persist.** SQLite stores numeric user IDs, access status, request identifiers, and timestamps in `data/access.sqlite3` locally. The supplied Compose setup keeps it in the named `access-data` volume, writable by the container's non-root user. It stores no TOTP secrets, codes, display names, or message contents. Each bot ID has separate records; a different bot starts with only its configured owner authorized.
+- **Keep the authorization volume.** Normal rebuilds, restarts, and `docker compose down` retain access records. `docker compose down -v` deletes them. Local Python and Docker use separate storage unless explicitly configured to share it. Storage errors prevent startup or deny the affected request; they never enable public access.
 - **Protect the host.** Keep its clock synchronized, swap disabled, and recovery codes stored separately. Python does not guarantee forensic memory erasure.
 - **Payloads stay out of logs.** Application logs exclude secrets, codes, and message payloads. The supplied Compose configuration disables persistent container logs.
 
@@ -155,7 +190,7 @@ Stop with `docker compose down`. Allow the configured **30-second shutdown perio
 <details>
 <summary><b>Run locally with Python and uv</b></summary>
 
-Requires **Python 3.12+** and [uv](https://docs.astral.sh/uv/). Create `.env` as described in [Local setup](#local-setup), then run:
+Requires **Python 3.12+** and [uv](https://docs.astral.sh/uv/). Create `.env` as described in [Local setup](#local-setup), including `OWNER_TELEGRAM_ID`, then run:
 
 ```sh
 uv sync --locked --extra dev

@@ -4,6 +4,8 @@ services:
     init: true
     restart: unless-stopped
     env_file: .env
+    volumes:
+      - access-data:/opt/bot/data
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -18,3 +20,5 @@ services:
     stop_grace_period: 30s
     logging:
       driver: none
+volumes:
+  access-data:

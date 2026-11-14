@@ -22,17 +22,17 @@ def message_update(user=11, chat=None, chat_type="private", text=DUMMY_SECRET, u
     )
 
 
-def dispatcher(manager):
+def dispatcher(manager, access):
     dp = Dispatcher(disable_fsm=True)
-    dp.include_router(make_router(manager))
+    dp.include_router(make_router(manager, access))
     bot = Bot("123456:TEST_TOKEN_FOR_OFFLINE_UNIT_TESTS")
     bot.session = AsyncMock(return_value=True)
     return dp, bot
 
 
-async def test_real_dispatcher_accepts_private_secrets_and_rejects_groups(environment):
+async def test_real_dispatcher_accepts_private_secrets_and_rejects_groups(environment, access):
     manager, clock, transport = environment
-    dp, bot = dispatcher(manager)
+    dp, bot = dispatcher(manager, access)
     await dp.feed_update(bot, message_update(chat=-99, chat_type="group"))
     await dp.feed_update(bot, message_update(chat=22))
     await settle()
@@ -44,9 +44,9 @@ async def test_real_dispatcher_accepts_private_secrets_and_rejects_groups(enviro
     assert (11, 1) in transport.deleted
 
 
-async def test_real_callback_rejects_foreign_sender_then_allows_owner(environment):
+async def test_real_callback_rejects_foreign_sender_then_allows_owner(environment, access):
     manager, clock, transport = environment
-    dp, bot = dispatcher(manager)
+    dp, bot = dispatcher(manager, access)
     await dp.feed_update(bot, message_update())
     await settle()
     session = manager.sessions[11]
@@ -78,9 +78,9 @@ async def test_real_callback_rejects_foreign_sender_then_allows_owner(environmen
     assert not transport.messages
 
 
-async def test_commands_with_secret_arguments_are_deleted(environment):
+async def test_commands_with_secret_arguments_are_deleted(environment, access):
     manager, clock, transport = environment
-    dp, bot = dispatcher(manager)
+    dp, bot = dispatcher(manager, access)
     await dp.feed_update(bot, message_update(text=f"/start {DUMMY_SECRET}"))
     await settle()
     assert (11, 1) in transport.deleted
@@ -88,9 +88,9 @@ async def test_commands_with_secret_arguments_are_deleted(environment):
     assert all(DUMMY_SECRET not in text for _, _, text in transport.sent)
 
 
-async def test_onboarding_and_prompt_button(environment):
+async def test_onboarding_and_prompt_button(environment, access):
     manager, clock, transport = environment
-    dp, bot = dispatcher(manager)
+    dp, bot = dispatcher(manager, access)
     await dp.feed_update(bot, message_update(text="/start"))
     await settle()
     text = transport.sent[0][2]

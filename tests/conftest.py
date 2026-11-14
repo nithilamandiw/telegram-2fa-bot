@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 import pytest_asyncio
 
+from app.access import AccessService, AccessStore
 from app.sessions import Clock, SessionManager
 from app.transport import Buttons, Unavailable
 
@@ -108,3 +109,11 @@ async def environment():
     await settle()
     assert not manager.sessions
     assert not manager._tasks
+
+
+@pytest_asyncio.fixture
+async def access(environment, tmp_path):
+    manager, _, _ = environment
+    store = AccessStore(tmp_path / "access.sqlite3", 123456)
+    yield AccessService(store, 11, manager)
+    store.close()

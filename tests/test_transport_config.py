@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -23,13 +24,36 @@ def test_missing_token_and_invalid_timezone_do_not_quote_values(monkeypatch):
     assert "PRIVATE_INVALID_TIMEZONE" not in str(exc.value)
 
 
-def test_credentials_hidden_and_old_owner_config_ignored(monkeypatch):
+def test_credentials_hidden_and_owner_config_loaded(monkeypatch):
     monkeypatch.setenv("BOT_TOKEN", "123456:OFFLINE_TEST_TOKEN")
     monkeypatch.setenv("DISPLAY_TIMEZONE", "Asia/Colombo")
     monkeypatch.setenv("OWNER_TELEGRAM_ID", "11")
     settings = Settings.from_env()
     assert settings.bot_token not in repr(settings)
-    assert not hasattr(settings, "owner_telegram_id")
+    assert settings.owner_telegram_id == 11
+
+
+@pytest.mark.parametrize("owner", [None, "", "@owner", "-11", "0", "1.5", "PRIVATE_ID", str(2**52)])
+def test_owner_id_required_and_errors_do_not_echo_input(monkeypatch, owner):
+    monkeypatch.setenv("BOT_TOKEN", "123456:OFFLINE_TEST_TOKEN")
+    if owner is None:
+        monkeypatch.delenv("OWNER_TELEGRAM_ID", raising=False)
+    else:
+        monkeypatch.setenv("OWNER_TELEGRAM_ID", owner)
+    with pytest.raises(ValueError, match="OWNER_TELEGRAM_ID") as exc:
+        Settings.from_env()
+    assert "PRIVATE_ID" not in str(exc.value)
+
+
+def test_database_path_defaults_and_requires_persistent_file(monkeypatch):
+    monkeypatch.setenv("BOT_TOKEN", "123456:OFFLINE_TEST_TOKEN")
+    monkeypatch.setenv("OWNER_TELEGRAM_ID", "11")
+    monkeypatch.delenv("AUTH_DB_PATH", raising=False)
+    assert Settings.from_env().auth_db_path == Path("data/access.sqlite3")
+    for path in ("", ":memory:"):
+        monkeypatch.setenv("AUTH_DB_PATH", path)
+        with pytest.raises(ValueError, match="AUTH_DB_PATH"):
+            Settings.from_env()
 
 
 def test_external_payload_logs_are_filtered():
