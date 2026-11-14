@@ -43,8 +43,8 @@ These are Ubuntu 24.04 packages. If apt cannot locate them, enable Universe with
 Create `.env` for this deployment:
 
 ```sh
-umask 077
 cp .env.example .env
+chmod 600 .env
 nano .env
 ```
 
@@ -100,5 +100,18 @@ sudo docker compose run --rm bot
 ```
 
 Check the token, numeric owner ID, database path/permissions, BotFather settings, outbound connectivity, and whether another bot instance is running. Container log storage is disabled, so use foreground output for diagnostics. Press Ctrl+C before restarting with `sudo docker compose up -d`.
+
+If an older image reports `PermissionError` for `/opt/bot/app/__init__.py`, a restrictive shell umask may have made cloned code unreadable by the container user. From the project directory, repair only code permissions and rebuild:
+
+```sh
+umask 022
+chmod -R u=rwX,go=rX app
+chmod 644 pyproject.toml uv.lock README.md
+chmod 600 .env
+sudo docker compose build --no-cache
+sudo docker compose run --rm bot
+```
+
+Updated images normalize code permissions and verify the application import as UID 10001 during the build. These commands retain the authorization volume and existing access decisions.
 
 Before retiring the server, stop the bot gracefully. Terminate unused instances and review retained volumes and allocated IP addresses for ongoing charges. See the [README](../README.md#privacy-and-operation) for privacy and cleanup limits.

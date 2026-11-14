@@ -62,8 +62,8 @@ Open [@BotFather](https://t.me/BotFather), create a bot, and obtain its token. D
 ```sh
 git clone https://github.com/nithilamandiw/telegram-2fa-bot.git
 cd telegram-2fa-bot
-umask 077
 cp .env.example .env
+chmod 600 .env
 ```
 
 Edit `.env` and set your BotFather token and **your own numeric Telegram user ID**:
@@ -78,6 +78,8 @@ AUTH_DB_PATH=data/access.sqlite3
 Replace the example owner ID with your own user ID, not a username or the bot's ID. Missing or invalid owner configuration prevents startup. If you do not know your ID, use [Owner ID lookup](#owner-id-lookup) before starting.
 
 `DISPLAY_TIMEZONE` accepts an IANA timezone. Keep `.env` out of Git and use it only for bot configuration, never TOTP secrets. Keep the default database path when using the supplied Docker volume.
+
+The image sets code permissions explicitly and checks importing the application as the non-root bot user during the build. Restrictive host file permissions must not prevent the container from reading its code; `.env` remains private and is excluded from the image.
 
 ### 3. Start
 
